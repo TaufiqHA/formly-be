@@ -2,8 +2,9 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\FormController;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\FormFieldController;
 use App\Http\Controllers\IntegrationController;
+use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     // Auth routes
@@ -23,6 +24,9 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('forms', FormController::class);
         Route::patch('forms/{id}/status', [FormController::class, 'updateStatus']);
         Route::get('forms/{id}/stats', [FormController::class, 'stats']);
+
+        // Form Fields API
+        Route::put('forms/{id}/fields', [FormFieldController::class, 'updateBulk']);
     });
 });
 Route::get('/v1/test-guzzle', [IntegrationController::class, 'getData']);

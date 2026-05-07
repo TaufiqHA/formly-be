@@ -1,87 +1,136 @@
-# Rencana Implementasi (Implementation Plan) - User Seeder
+# Rencana Implementasi (Implementation Plan) - Form Fields API
 
-Dokumen ini berisi panduan langkah demi langkah untuk membuat `UserSeeder` pada project Formly. Tujuannya adalah menyiapkan data admin *default* agar sistem dapat langsung diuji coba (login) menggunakan kredensial yang tertulis di `API_REFERENCE.md`. Panduan ini dirancang agar mudah dieksekusi oleh Junior Developer maupun AI model.
+Dokumen ini berisi panduan langkah demi langkah untuk mengimplementasikan fitur Form Fields (manajemen kolom pada formulir) di project Formly. Panduan ini dirancang agar mudah diikuti oleh Junior Developer atau AI model lainnya.
 
 ## Tujuan
-Membuat seeder untuk tabel `users` yang akan menyediakan satu akun admin dengan rincian:
-- **Email:** `admin@orderly.app` (Sesuai dengan `API_REFERENCE.md`)
-- **Password:** `password123`
-- **Name:** `Orderly Admin`
+Membuat `FormFieldController` dan mendefinisikan endpoint untuk memanipulasi *field* pada suatu form sesuai dengan `API_REFERENCE.md`:
+- `PUT /api/v1/forms/{id}/fields` - Menyimpan struktur *fields* secara massal (*bulk update*).
+
+Berdasarkan aturan di API Reference:
+1. Jika *field* di dalam *payload* memiliki `id`, maka data akan di-**update**.
+2. Jika *field* di dalam *payload* **tidak** memiliki `id`, maka data akan di-**create** (buat baru).
+3. Jika *field* sudah ada di database namun **tidak dikirimkan** di dalam *payload*, maka data akan di-**delete** (dihapus).
 
 ---
 
-## Langkah 1: Buat Class Seeder
+## Langkah 1: Buat FormFieldController
 
-Gunakan Artisan command untuk men-generate class seeder baru.
+Gunakan Artisan command untuk membuat controller baru.
 
 **Perintah CLI:**
 ```bash
-php artisan make:seeder UserSeeder
+php artisan make:controller Api/V1/FormFieldController
 ```
 
 ---
 
-## Langkah 2: Implementasi UserSeeder
+## Langkah 2: Tambahkan Route API
 
-Buka file `database/seeders/UserSeeder.php`. Di dalam method `run()`, tambahkan kode untuk membuat user admin.
-Gunakan metode `updateOrCreate` agar seeder ini aman meskipun dijalankan berulang kali (tidak akan terjadi duplikasi data *email* yang sama).
+Buka file `routes/api.php` dan tambahkan routing untuk endpoint *form fields* di dalam middleware `auth:sanctum`.
 
-**Kode untuk `database/seeders/UserSeeder.php`:**
+**Kode untuk ditambahkan di `routes/api.php`:**
 ```php
-<?php
+use App\Http\Controllers\Api\V1\FormFieldController;
+use Illuminate\Support\Facades\Route;
 
-namespace Database\Seeders;
+// Pastikan kode ini berada di dalam block Route::middleware('auth:sanctum')->group(...)
+Route::prefix('v1')->group(function () {
+    // ... route form lainnya
 
-use App\Models\User;
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
-
-class UserSeeder extends Seeder
-{
-    /**
-     * Run the database seeds.
-     */
-    public function run(): void
-    {
-        // updateOrCreate mencari berdasarkan parameter pertama (email). 
-        // Jika tidak ada, buat baru dengan parameter kedua. Jika ada, perbarui datanya.
-        User::updateOrCreate(
-            ['email' => 'admin@orderly.app'],
-            [
-                'name' => 'Orderly Admin',
-                'password' => Hash::make('password123'),
-                'email_verified_at' => now(),
-            ]
-        );
-    }
-}
+    // Route untuk bulk update form fields
+    Route::put('forms/{id}/fields', [FormFieldController::class, 'updateBulk']);
+});
 ```
 
 ---
 
-## Langkah 3: Daftarkan ke DatabaseSeeder
+## Langkah 3: Implementasi Logika di FormFieldController
 
-Buka file `database/seeders/DatabaseSeeder.php`. Pastikan class `UserSeeder` di-register agar ikut tereksekusi saat perintah `db:seed` umum dijalankan.
+Buka `app/Http/Controllers/Api/V1/FormFieldController.php`. Implementasikan method `updateBulk`. Kita perlu memvalidasi input array, mengambil *form* berdasarkan ID, dan menjalankan operasi Create/Update/Delete (Sync) menggunakan database transaction agar aman.
 
-**Kode untuk `database/seeders/DatabaseSeeder.php`:**
+**Kode untuk `FormFieldController.php`:**
 ```php
 <?php
 
-namespace Database\Seeders;
+namespace App\Http\Controllers\Api\V1;
 
-use Illuminate\Database\Seeder;
+use App\Http\Controllers\Controller;
+use App\Models\Form;
+use App\Models\FormField;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
-class DatabaseSeeder extends Seeder
+class FormFieldController extends Controller
 {
-    /**
-     * Seed the application's database.
-     */
-    public function run(): void
+    public function updateBulk(Request $request, $id)
     {
-        $this->call([
-            UserSeeder::class,
-            // (Opsional) tambahkan pemanggilan seeder lain di bawah sini jika diperlukan
+        // 1. Validasi input request
+        $validated = $request->validate([
+            'fields' => 'present|array',
+            'fields.*.id' => 'nullable|uuid',
+            'fields.*.label' => 'required|string',
+            'fields.*.field_type' => 'required|string', // misalnya: text, radio, checkbox
+            'fields.*.placeholder' => 'nullable|string',
+            'fields.*.is_required' => 'required|boolean',
+            'fields.*.options' => 'nullable|array', // opsi untuk radio/dropdown
+            'fields.*.sort_order' => 'required|integer',
         ]);
+
+        // 2. Pastikan form ada (dan bisa ditambahkan pengecekan kepemilikan user_id jika perlu)
+        $form = Form::findOrFail($id);
+
+        $fieldsData = $validated['fields'] ?? [];
+
+        // 3. Kumpulkan ID dari field yang dikirimkan (yang sudah ada/punya ID)
+        $providedIds = collect($fieldsData)->pluck('id')->filter()->toArray();
+
+        // Gunakan Transaction agar jika ada yang gagal, semua perubahan di-rollback
+        DB::beginTransaction();
+        try {
+            // 4. DELETE: Hapus field di database yang tidak ada di $providedIds
+            $form->fields()->whereNotIn('id', $providedIds)->delete();
+
+            // 5. CREATE / UPDATE: Loop data yang dikirim
+            foreach ($fieldsData as $field) {
+                if (isset($field['id']) && $field['id']) {
+                    // Update field yang sudah ada
+                    FormField::where('id', $field['id'])
+                        ->where('form_id', $form->id)
+                        ->update([
+                            'label' => $field['label'],
+                            'field_type' => $field['field_type'],
+                            'placeholder' => $field['placeholder'] ?? null,
+                            'is_required' => $field['is_required'],
+                            'options' => $field['options'] ?? null,
+                            'sort_order' => $field['sort_order'],
+                        ]);
+                } else {
+                    // Create field baru jika tidak ada ID
+                    $form->fields()->create([
+                        'label' => $field['label'],
+                        'field_type' => $field['field_type'],
+                        'placeholder' => $field['placeholder'] ?? null,
+                        'is_required' => $field['is_required'],
+                        'options' => $field['options'] ?? null,
+                        'sort_order' => $field['sort_order'],
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Struktur form berhasil disimpan'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat menyimpan data: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }
 ```
@@ -89,8 +138,7 @@ class DatabaseSeeder extends Seeder
 ---
 
 ## Langkah 4: Format File (Laravel Pint)
-
-Setelah file selesai di-edit, pastikan Anda merapikan formatnya dengan Laravel Pint (berdasarkan aturan di ruleset Formly).
+Setelah menyalin kode di atas, pastikan untuk merapikannya menggunakan *formatter* bawaan.
 
 **Perintah CLI:**
 ```bash
@@ -99,21 +147,8 @@ vendor/bin/pint --dirty --format agent
 
 ---
 
-## Langkah 5: Jalankan Seeder ke Database
-
-Terakhir, jalankan seeder untuk memasukkan data tersebut ke database secara nyata. Pastikan database Anda sudah menyala dan tabel `users` sudah ada (`php artisan migrate`).
-
-**Perintah CLI:**
-```bash
-php artisan db:seed --class=UserSeeder
-```
-
-*(Catatan Tambahan: Anda juga bisa menggunakan `php artisan migrate:fresh --seed` jika ke depannya ingin mereset seluruh database dari awal).*
-
----
-
 ## Kriteria Selesai (Definition of Done)
-- [ ] File `database/seeders/UserSeeder.php` berhasil terbuat dengan logika `updateOrCreate`.
-- [ ] Class `UserSeeder` telah didaftarkan di dalam `DatabaseSeeder.php`.
-- [ ] Perintah eksekusi seeder berjalan tanpa error.
-- [ ] Akun `admin@orderly.app` dengan kata sandi `password123` sukses digunakan untuk masuk (login) ke sistem melalui endpoint `POST /api/v1/auth/login`.
+- [ ] File `app/Http/Controllers/Api/V1/FormFieldController.php` terbuat.
+- [ ] Method `updateBulk` memuat logika *Create, Update, dan Delete* yang dibungkus dalam `DB::beginTransaction()`.
+- [ ] Routing `PUT /api/v1/forms/{id}/fields` sudah terdaftar di `routes/api.php`.
+- [ ] Kode bebas dari *syntax error* dan lulus *Laravel Pint*.
