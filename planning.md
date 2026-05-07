@@ -1,160 +1,208 @@
-# Rencana Implementasi (Implementation Plan) - Authentication API
+# Rencana Implementasi (Implementation Plan) - Forms API
 
-Dokumen ini berisi panduan langkah demi langkah untuk mengimplementasikan fitur autentikasi pada project Formly (berbasis Laravel 11 + Sanctum). Panduan ini dirancang agar mudah diikuti oleh Junior Developer atau AI model lainnya.
+Dokumen ini berisi panduan langkah demi langkah untuk mengimplementasikan fitur Forms (Formulir) pada project Formly. Panduan ini dirancang agar mudah diikuti oleh Junior Developer atau AI model lainnya.
 
 ## Tujuan
-Membuat `AuthController` dan mendefinisikan endpoint untuk Authentication sesuai dengan `API_REFERENCE.md`:
-1. `POST /api/v1/auth/login` (Public)
-2. `POST /api/v1/auth/logout` (Membutuhkan Token JWT/Sanctum)
-3. `GET /api/v1/auth/me` (Membutuhkan Token JWT/Sanctum)
-
-## Prasyarat
-- Memahami konsep dasar Laravel (Controller, Routing, Request Validation).
-- Laravel Sanctum sudah terinstal (bawaan Laravel 11) dan tabel `personal_access_tokens` sudah ada di database.
+Membuat `FormController` dan mendefinisikan seluruh endpoint terkait `Forms` sesuai dengan `API_REFERENCE.md`. Endpoint ini dilindungi oleh autentikasi (`auth:sanctum`):
+1. `GET /api/v1/forms` - Menampilkan daftar form pengguna.
+2. `POST /api/v1/forms` - Membuat form baru.
+3. `GET /api/v1/forms/{id}` - Menampilkan detail form beserta field-nya.
+4. `PUT /api/v1/forms/{id}` - Memperbarui judul & deskripsi form.
+5. `DELETE /api/v1/forms/{id}` - Menghapus form.
+6. `PATCH /api/v1/forms/{id}/status` - Mengubah status form (draft/active).
+7. `GET /api/v1/forms/{id}/stats` - Menampilkan statistik form (views vs submissions).
 
 ---
 
-## Langkah 1: Buat AuthController
+## Langkah 1: Buat FormController
 
-Gunakan Artisan command untuk membuat controller baru.
+Gunakan Artisan command untuk membuat controller. Gunakan flag `--api` agar otomatis membuat method standard API (index, store, show, update, destroy).
 
 **Perintah CLI:**
 ```bash
-php artisan make:controller Api/V1/AuthController
+php artisan make:controller Api/V1/FormController --api
 ```
 
 ---
 
 ## Langkah 2: Tambahkan Route API
 
-Buka file `routes/api.php` (jika belum ada, jalankan `php artisan install:api`). Tambahkan konfigurasi routing untuk endpoint autentikasi dengan prefix `v1`.
+Buka file `routes/api.php` dan tambahkan routing untuk `FormController` di dalam middleware `auth:sanctum`.
 
-**Kode untuk `routes/api.php`:**
+**Kode untuk ditambahkan di `routes/api.php`:**
 ```php
-use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\FormController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1/auth')->group(function () {
-    // Public route
-    Route::post('/login', [AuthController::class, 'login']);
-
-    // Protected routes (Butuh Token)
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/me', [AuthController::class, 'me']);
-    });
+// Pastikan blok ini berada di dalam Route::middleware('auth:sanctum')->group(...)
+Route::prefix('v1')->group(function () {
+    // Standard CRUD (Otomatis mencakup index, store, show, update, destroy)
+    Route::apiResource('forms', FormController::class);
+    
+    // Custom routes untuk status dan stats
+    Route::patch('forms/{id}/status', [FormController::class, 'updateStatus']);
+    Route::get('forms/{id}/stats', [FormController::class, 'stats']);
 });
 ```
 
 ---
 
-## Langkah 3: Implementasi Method di AuthController
+## Langkah 3: Implementasi Method di FormController
 
-Buka file `app/Http/Controllers/Api/V1/AuthController.php` dan implementasikan 3 method utama: `login`, `logout`, dan `me`. Gunakan standar format respons JSON Formly: `{"success": true, "data": {...}, "message": "..."}`.
+Buka `app/Http/Controllers/Api/V1/FormController.php`. Implementasikan method-method berikut dengan mengembalikan response JSON sesuai struktur: `{"success": true, "data": {...}, "message": "..."}`. Pastikan menggunakan *dependency injection* atau *eloquent* yang tepat.
 
-### 3.1. Method `login`
-Tugas: Memvalidasi input (email, password), mengecek kredensial, dan membuat token Sanctum jika berhasil.
+### 3.1. Method `index`
+Tugas: Menampilkan semua form yang dimiliki oleh user yang sedang login.
 
-**Kode Implementasi:**
 ```php
-<?php
-
-namespace App\Http\Controllers\Api\V1;
-
-use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
-
-class AuthController extends Controller
+public function index(Request $request)
 {
-    public function login(Request $request)
-    {
-        // 1. Validasi input
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
-
-        // 2. Cari user berdasarkan email
-        $user = User::where('email', $request->email)->first();
-
-        // 3. Cek user dan verifikasi password
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['Kredensial yang diberikan tidak cocok dengan data kami.'],
-            ]);
-        }
-
-        // 4. Hapus token lama (opsional, jika ingin single device login)
-        // $user->tokens()->delete();
-
-        // 5. Buat token baru menggunakan Sanctum
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        // 6. Kembalikan respons sesuai format API_REFERENCE.md
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'token' => $token,
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    // 'role' => 'admin' // Sesuaikan jika ada implementasi Spatie Role/Permission
-                ]
-            ],
-            'message' => 'Login berhasil'
-        ]);
-    }
+    // Mengambil form milik user yang sedang login
+    $forms = \App\Models\Form::where('user_id', $request->user()->id)->get();
+    
+    // Jika ada perhitungan total submissions, bisa di-load dengan withCount('submissions')
+    
+    return response()->json([
+        'success' => true,
+        'data' => $forms
+    ]);
+}
 ```
 
-### 3.2. Method `logout`
-Tugas: Menghapus token yang sedang digunakan saat ini.
+### 3.2. Method `store`
+Tugas: Membuat form baru dengan status default 'draft' dan `slug` otomatis.
 
-**Lanjutan Kode (Tambahkan di dalam kelas yang sama):**
 ```php
-    public function logout(Request $request)
-    {
-        // Hapus token yang digunakan untuk request saat ini
-        $request->user()->currentAccessToken()->delete();
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'title' => 'required|string|max:255',
+        'description' => 'nullable|string',
+    ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Logout berhasil'
-        ]);
-    }
+    $form = \App\Models\Form::create([
+        'user_id' => $request->user()->id,
+        'title' => $validated['title'],
+        'slug' => \Illuminate\Support\Str::slug($validated['title'] . '-' . uniqid()),
+        'description' => $validated['description'] ?? null,
+        'status' => 'draft',
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'data' => $form
+    ], 201);
+}
 ```
 
-### 3.3. Method `me`
-Tugas: Mengambil profil pengguna yang saat ini sedang login.
+### 3.3. Method `show`
+Tugas: Menampilkan detail form beserta relasi `fields`.
 
-**Lanjutan Kode (Tambahkan di dalam kelas yang sama):**
 ```php
-    public function me(Request $request)
-    {
-        $user = $request->user();
+public function show($id)
+{
+    // Eager load fields dan urutkan berdasarkan sort_order
+    $form = \App\Models\Form::with(['fields' => function($query) {
+        $query->orderBy('sort_order', 'asc');
+    }])->findOrFail($id);
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                // tambahkan field lain yang diperlukan sesuai API_REFERENCE.md
-                // seperti phone, location, avatar_url, role
-                'created_at' => $user->created_at,
-            ]
-        ]);
-    }
+    return response()->json([
+        'success' => true,
+        'data' => $form
+    ]);
+}
+```
+
+### 3.4. Method `update`
+Tugas: Update judul & deskripsi form.
+
+```php
+public function update(Request $request, $id)
+{
+    $form = \App\Models\Form::findOrFail($id);
+
+    $validated = $request->validate([
+        'title' => 'required|string|max:255',
+        'description' => 'nullable|string',
+    ]);
+
+    $form->update($validated);
+
+    return response()->json([
+        'success' => true,
+        'data' => $form
+    ]);
+}
+```
+
+### 3.5. Method `destroy`
+Tugas: Menghapus form.
+
+```php
+public function destroy($id)
+{
+    $form = \App\Models\Form::findOrFail($id);
+    $form->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Form berhasil dihapus'
+    ]);
+}
+```
+
+### 3.6. Method `updateStatus` (Custom)
+Tugas: Ubah status form dari draft ke active atau sebaliknya.
+
+```php
+public function updateStatus(Request $request, $id)
+{
+    $form = \App\Models\Form::findOrFail($id);
+
+    $validated = $request->validate([
+        'status' => 'required|in:draft,active'
+    ]);
+
+    $form->update(['status' => $validated['status']]);
+
+    return response()->json([
+        'success' => true,
+        // Di API Reference, kembaliannya berupa data form (bisa disesuaikan jika hanya butuh pesan)
+        'data' => $form,
+        'message' => 'Status form berhasil diubah'
+    ]);
+}
+```
+
+### 3.7. Method `stats` (Custom)
+Tugas: Menampilkan statistik form (sementara menggunakan dummy views jika belum ada fitur tracking views).
+
+```php
+public function stats($id)
+{
+    $form = \App\Models\Form::findOrFail($id);
+    
+    // Contoh perhitungan sederhana
+    $totalViews = 5000; // Mock data karena belum ada tabel views
+    // $totalSubmissions = $form->submissions()->count(); // Jika ada relasi
+    $totalSubmissions = 1248; // Mock data sesuai dokumentasi
+    $conversionRate = $totalViews > 0 ? ($totalSubmissions / $totalViews) * 100 : 0;
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'total_views' => $totalViews,
+            'total_submissions' => $totalSubmissions,
+            'conversion_rate' => round($conversionRate, 2)
+        ]
+    ]);
 }
 ```
 
 ---
 
 ## Langkah 4: Format File (Laravel Pint)
-Setelah semua kode ditulis, pastikan menjalankan Laravel Pint untuk merapikan kode agar sesuai dengan standar Laravel (PSR-12/Laravel Style).
+Setelah kode selesai, pastikan kodenya diformat agar sesuai standar PSR-12 dan style guide Laravel.
 
 **Perintah CLI:**
 ```bash
@@ -164,7 +212,7 @@ vendor/bin/pint --dirty --format agent
 ---
 
 ## Kriteria Selesai (Definition of Done)
-- [ ] File `app/Http/Controllers/Api/V1/AuthController.php` berhasil dibuat dan berisi logic 3 method tersebut.
-- [ ] File `routes/api.php` memiliki routing untuk `/login` (public) dan `/logout`, `/me` (protected auth:sanctum).
-- [ ] Format kembalian (JSON Response) sudah mengikuti standar yang ditentukan di `API_REFERENCE.md`.
-- [ ] Kode sudah di-format rapi menggunakan Laravel Pint.
+- [ ] File `app/Http/Controllers/Api/V1/FormController.php` berhasil dibuat beserta 7 method-nya.
+- [ ] File `routes/api.php` memuat `Route::apiResource` dan 2 custom route untuk `forms`.
+- [ ] Seluruh format Response JSON sudah sesuai dengan struktur di `API_REFERENCE.md`.
+- [ ] Kode sudah bebas dari error (syntax & logic) dan lolos pengecekan `Laravel Pint`.
