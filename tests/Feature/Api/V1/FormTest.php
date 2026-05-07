@@ -1,0 +1,147 @@
+<?php
+
+namespace Tests\Feature\Api\V1;
+
+use App\Models\Form;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class FormTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->user = User::factory()->create();
+    }
+
+    public function test_can_list_forms(): void
+    {
+        Form::factory()->count(3)->create(['user_id' => $this->user->id]);
+        Form::factory()->count(2)->create(); // Other user's forms
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->getJson('/api/v1/forms');
+
+        $response->assertStatus(200)
+            ->assertJsonCount(3, 'data')
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    '*' => ['id', 'title', 'slug', 'status', 'updated_at']
+                ]
+            ]);
+    }
+
+    public function test_can_create_form(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        $response = $this->postJson('/api/v1/forms', [
+            'title' => 'New Survey',
+            'description' => 'A description here'
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonStructure([
+                'success',
+                'data' => ['id', 'title', 'slug', 'status']
+            ])
+            ->assertJsonPath('data.title', 'New Survey')
+            ->assertJsonPath('data.status', 'draft');
+
+        $this->assertDatabaseHas('forms', [
+            'title' => 'New Survey',
+            'user_id' => $this->user->id
+        ]);
+    }
+
+    public function test_can_show_form(): void
+    {
+        $form = Form::factory()->create(['user_id' => $this->user->id]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->getJson("/api/v1/forms/{$form->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => ['id', 'title', 'description', 'status', 'fields']
+            ]);
+    }
+
+    public function test_can_update_form(): void
+    {
+        $form = Form::factory()->create(['user_id' => $this->user->id]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->putJson("/api/v1/forms/{$form->id}", [
+            'title' => 'Updated Title',
+            'description' => 'Updated Description'
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.title', 'Updated Title');
+
+        $this->assertDatabaseHas('forms', [
+            'id' => $form->id,
+            'title' => 'Updated Title'
+        ]);
+    }
+
+    public function test_can_delete_form(): void
+    {
+        $form = Form::factory()->create(['user_id' => $this->user->id]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->deleteJson("/api/v1/forms/{$form->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('message', 'Form berhasil dihapus');
+
+        $this->assertDatabaseMissing('forms', ['id' => $form->id]);
+    }
+
+    public function test_can_update_form_status(): void
+    {
+        $form = Form::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'draft'
+        ]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->patchJson("/api/v1/forms/{$form->id}/status", [
+            'status' => 'active'
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.status', 'active');
+
+        $this->assertEquals('active', $form->refresh()->status);
+    }
+
+    public function test_can_get_form_stats(): void
+    {
+        $form = Form::factory()->create(['user_id' => $this->user->id]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->getJson("/api/v1/forms/{$form->id}/stats");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => ['total_views', 'total_submissions', 'conversion_rate']
+            ]);
+    }
+}
