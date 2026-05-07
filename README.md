@@ -1,58 +1,87 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+<div align="center">
+  <h1>📝 Formly Backend API</h1>
+  <p><strong>Sistem Manajemen Formulir Digital & Order Dinamis (Berbasis Laravel 11)</strong></p>
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+  <!-- Badges -->
+  <p>
+    <img src="https://img.shields.io/badge/PHP-8.3-777BB4?style=flat-square&logo=php&logoColor=white" alt="PHP Version" />
+    <img src="https://img.shields.io/badge/Laravel-11.x-FF2D20?style=flat-square&logo=laravel&logoColor=white" alt="Laravel Version" />
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License" />
+  </p>
+</div>
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🚀 Apa itu Formly?
+**Formly** adalah *backend API* modern yang dirancang untuk membuat, mengelola, dan mempublikasikan formulir digital secara dinamis (mirip dengan Google Forms atau Typeform). Sistem ini menyediakan *endpoint* RESTful yang handal untuk menangani pembuatan *form*, tipe *field* yang beragam, hingga manajemen *submission* data secara aman.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## ✨ Fitur Utama
+- **🔐 Autentikasi Aman:** Menggunakan Laravel Sanctum untuk manajemen Token berbasis API.
+- **🏗️ Dynamic Form Builder:** Buat *form* dengan *field* tak terbatas (Text, Radio, Checkbox, dll).
+- **📊 Submission Tracking:** Lacak data yang masuk dengan mudah dilengkapi analitik sederhana.
+- **📜 Audit Trail System:** Semua perubahan (*Create, Update, Delete*) pada data penting dicatat secara otomatis.
+- **🚀 API-First Design:** Struktur JSON respons yang konsisten di semua *endpoint*.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## 🛠️ Tech Stack
+- **Framework:** [Laravel 11](https://laravel.com/)
+- **Bahasa:** PHP 8.3
+- **Autentikasi:** Laravel Sanctum
+- **Database:** MySQL / PostgreSQL
+- **Code Formatter:** Laravel Pint
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🏁 Mulai Menggunakan (Getting Started)
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+Ikuti langkah-langkah di bawah ini untuk menjalankan *backend* Formly di komputer lokal Anda:
 
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
+### 1. Kloning Repositori
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/TaufiqHA/formly-be.git
+cd formly-be
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### 2. Instalasi Dependensi
+```bash
+composer install
+```
 
-## Contributing
+### 3. Konfigurasi Environment
+Buat salinan file konfigurasi bawaan dan *generate* Application Key.
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+*(Pastikan Anda menyesuaikan konfigurasi database `DB_*` di dalam file `.env` dengan database lokal Anda).*
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 4. Migrasi & Seeding Database
+Buat struktur tabel dan masukkan data bawaan (*admin user*).
+```bash
+php artisan migrate --seed
+```
 
-## Code of Conduct
+### 5. Jalankan Server Lokal
+```bash
+php artisan serve
+```
+API dapat diakses melalui `http://localhost:8000/api/v1/...`
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## 🔑 Kredensial Login Default
+Setelah Anda menjalankan perintah *seed* di atas, Anda dapat login menggunakan kredensial berikut:
+- **Email:** `admin@orderly.app` *(atau `admin@mail.com` bergantung pada data seeder)*
+- **Password:** `password` / `password123`
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+---
 
-## License
+## 📖 Dokumentasi Referensi API
+Untuk melihat daftar lengkap endpoint (*Routes, Payload, JSON Response*), silakan merujuk ke dokumen:
+👉 **[API_REFERENCE.md](./API_REFERENCE.md)**
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+<div align="center">
+  Dibuat dengan ❤️ menggunakan Laravel
+</div>
