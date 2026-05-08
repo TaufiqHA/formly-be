@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\FormController;
 use App\Http\Controllers\Api\V1\FormFieldController;
@@ -49,11 +50,17 @@ Route::prefix('v1')->group(function () {
             Route::put('/whatsapp', [SettingController::class, 'updateWhatsApp']);
             Route::post('/whatsapp/test', [SettingController::class, 'testWhatsApp']);
         });
+
+        // Analytics
+        Route::prefix('analytics')->group(function () {
+            Route::get('/summary', [AnalyticsController::class, 'summary']);
+            Route::get('/trend', [AnalyticsController::class, 'trend']);
+            Route::get('/status-distribution', [AnalyticsController::class, 'statusDistribution']);
+        });
     });
 
     // Public Routes (Tanpa Auth)
     Route::prefix('public/forms')->group(function () {
-        // ... (Public routes tetap di sini)
         Route::get('/{slug}', [PublicFormController::class, 'show']);
         Route::post('/{slug}/submit', [PublicFormController::class, 'submit']);
     });

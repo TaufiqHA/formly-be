@@ -1,218 +1,152 @@
-# Perencanaan Implementasi Endpoint Settings
+# Perencanaan Implementasi Endpoint Analytics
 
-Dokumen ini berisi langkah-langkah teknis untuk mengimplementasikan controller dan endpoint **Settings** pada project Formly. Langkah-langkah ini disusun sesederhana mungkin agar mudah dipahami dan dieksekusi langsung oleh Junior Developer atau AI Model.
+Dokumen ini berisi langkah-langkah teknis untuk mengimplementasikan controller dan endpoint **Analytics** (Statistik/Dashboard) pada project Formly. Langkah-langkah ini disusun sesederhana mungkin agar mudah dipahami dan dieksekusi langsung oleh Junior Developer atau AI Model.
 
-Referensi dari `API_REFERENCE.md` bagian **6. Settings**.
+Referensi dari `API_REFERENCE.md` bagian **7. Analytics**.
 
 ---
 
 ## Tahap 1: Pembuatan Controller
 
-Kita akan membuat satu controller utama untuk mengelola pengaturan dan preferensi User (termasuk setting WhatsApp).
+Kita akan membuat satu controller utama untuk mengembalikan data agregasi statistik dashboard.
 
 **Langkah:**
 1. Buka terminal/command prompt.
 2. Jalankan perintah artisan berikut:
    ```bash
-   php artisan make:controller Api/V1/SettingController
+   php artisan make:controller Api/V1/AnalyticsController
    ```
 
 ---
 
 ## Tahap 2: Mendaftarkan Route API
 
-Endpoint settings berkaitan dengan user yang sedang login, sehingga wajib diproteksi dengan middleware `auth:sanctum`.
+Data analitik bersifat sensitif, sehingga rute ini wajib diproteksi dengan middleware `auth:sanctum`.
 
 **Langkah:**
 Buka `routes/api.php` dan tambahkan baris berikut di dalam grup `auth:sanctum`:
 
 ```php
-use App\Http\Controllers\Api\V1\SettingController;
+use App\Http\Controllers\Api\V1\AnalyticsController;
 
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
-    // ... rute lain seperti forms & submissions ...
+    // ... rute lain ...
     
-    // Settings
-    Route::prefix('settings')->group(function () {
-        Route::get('/', [SettingController::class, 'index']);
-        Route::put('/', [SettingController::class, 'updatePreferences']);
-        Route::put('/whatsapp', [SettingController::class, 'updateWhatsApp']);
-        Route::post('/whatsapp/test', [SettingController::class, 'testWhatsApp']);
+    // Analytics
+    Route::prefix('analytics')->group(function () {
+        Route::get('/summary', [AnalyticsController::class, 'summary']);
+        Route::get('/trend', [AnalyticsController::class, 'trend']);
+        Route::get('/status-distribution', [AnalyticsController::class, 'statusDistribution']);
     });
 });
 ```
 
 ---
 
-## Tahap 3: Implementasi Method pada `SettingController`
+## Tahap 3: Implementasi Method pada `AnalyticsController`
 
-Buka file `app/Http/Controllers/Api/V1/SettingController.php`. Tambahkan import model dan facade yang diperlukan:
+Buka file `app/Http/Controllers/Api/V1/AnalyticsController.php`. Tambahkan import model dan facade yang dibutuhkan:
 ```php
-use App\Models\UserPreference;
-use App\Models\WaSetting;
+use App\Models\Form;
+use App\Models\Submission;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http; // Untuk testing WhatsApp API
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 ```
 
-### 1. Method `index` (Mengambil Pengaturan User Saat Ini)
+### 1. Method `summary` (Ringkasan KPI)
+Mengembalikan total respon, form aktif, dan konversi rata-rata.
 ```php
-public function index()
+public function summary()
 {
-    $userId = Auth::id();
+    // 1. Hitung total form yang statusnya active
+    $activeForms = Form::where('status', 'active')->count();
 
-    // 1. Ambil atau buat UserPreference default jika belum ada
-    $preferences = UserPreference::firstOrCreate(
-        ['user_id' => $userId],
-        [
-            'notif_email_new_order' => true,
-            'notif_wa_auto_confirm' => false,
-            'theme' => 'light'
-        ]
-    );
+    // 2. Hitung total semua submission
+    $totalResponses = Submission::count();
 
-    // 2. Ambil atau buat WaSetting default jika belum ada
-    $waSetting = WaSetting::firstOrCreate(
-        ['user_id' => $userId],
-        [
-            'phone_number' => null,
-            'api_key' => null,
-            'connection_status' => 'disconnected',
-            'wa_template_new_order' => 'Halo {nama}, pesanan {id} Anda diterima.'
-        ]
-    );
+    // 3. Konversi (Conversion Rate). 
+    // Catatan: Jika saat ini belum ada tabel 'views' untuk melacak total pengunjung form, 
+    // kita bisa buat nilai konversi dummy atau 0 sementara, lalu update ketika fitur view selesai.
+    // Misal: (total_submissions / total_views) * 100
+    
+    $averageConversion = 0; // Default placeholder, akan diimplementasikan nanti saat data views tersedia.
 
-    // 3. Format Output
     return response()->json([
         'success' => true,
         'data' => [
-            'preferences' => [
-                'notif_email_new_order' => (bool) $preferences->notif_email_new_order,
-                'notif_wa_auto_confirm' => (bool) $preferences->notif_wa_auto_confirm,
-                'theme' => $preferences->theme,
-            ],
-            'whatsapp' => [
-                'phone_number' => $waSetting->phone_number,
-                'connection_status' => $waSetting->connection_status,
-                'wa_template_new_order' => $waSetting->wa_template_new_order,
-            ]
+            'total_responses' => $totalResponses,
+            'active_forms' => $activeForms,
+            'average_conversion' => $averageConversion
         ]
     ]);
 }
 ```
 
-### 2. Method `updatePreferences` (Simpan Preferensi Web/Email)
+### 2. Method `trend` (Data Chart: Respon per Hari)
+Mengambil data jumlah submission per hari, misalnya untuk 7 hari terakhir.
 ```php
-public function updatePreferences(Request $request)
+public function trend(Request $request)
 {
-    // Validasi Input
-    $request->validate([
-        'notif_email_new_order' => 'boolean',
-        'notif_wa_auto_confirm' => 'boolean',
-        'theme' => 'string|in:light,dark,system'
-    ]);
+    // Mengambil rentang 7 hari ke belakang dari hari ini
+    $startDate = Carbon::today()->subDays(6);
+    $endDate = Carbon::today()->endOfDay();
 
-    $userId = Auth::id();
-    $preferences = UserPreference::where('user_id', $userId)->first();
+    // Lakukan grouping by date menggunakan fitur database
+    $trends = Submission::select(
+            DB::raw('DATE(created_at) as date'),
+            DB::raw('COUNT(id) as count')
+        )
+        ->whereBetween('created_at', [$startDate, $endDate])
+        ->groupBy('date')
+        ->orderBy('date', 'asc')
+        ->get();
 
-    if ($preferences) {
-        $preferences->update($request->only([
-            'notif_email_new_order', 
-            'notif_wa_auto_confirm', 
-            'theme'
-        ]));
-    }
+    // Format output ke bentuk yang diinginkan chart frontend (misal: "Sen", "Sel")
+    // atau biarkan tanggal aslinya dan biar frontend yang format. Di API reference berbentuk "name", "value".
+    $formattedTrends = $trends->map(function ($item) {
+        $carbonDate = Carbon::parse($item->date);
+        
+        // Translasi hari ke bahasa Indonesia (opsional, frontend bisa handle ini juga)
+        $hariIndo = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        $name = substr($hariIndo[$carbonDate->dayOfWeek], 0, 3); // Ambil 3 huruf awal ("Sen", "Sel")
 
+        return [
+            'name' => $name, 
+            'value' => (int) $item->count
+        ];
+    });
+
+    // Opsional: Untuk hari yang kosong (0 submission), mungkin perlu logic tambahan 
+    // untuk mengisi tanggal kosong dengan value 0 agar grafik tidak putus.
+    
     return response()->json([
         'success' => true,
-        'message' => 'Preferensi berhasil disimpan'
+        'data' => $formattedTrends
     ]);
 }
 ```
 
-### 3. Method `updateWhatsApp` (Simpan Konfigurasi WA)
+### 3. Method `statusDistribution` (Distribusi Status Order)
+Mengembalikan jumlah submission dikelompokkan berdasarkan status (`new`, `read`, `done`, dll).
 ```php
-public function updateWhatsApp(Request $request)
+public function statusDistribution()
 {
-    // Validasi Input
-    $request->validate([
-        'api_key' => 'nullable|string',
-        'phone_number' => 'nullable|string',
-        'wa_template_new_order' => 'nullable|string'
-    ]);
+    // Agregasi jumlah per status
+    $distribution = Submission::select('status', DB::raw('COUNT(id) as count'))
+        ->groupBy('status')
+        ->get();
 
-    $userId = Auth::id();
-    $waSetting = WaSetting::where('user_id', $userId)->first();
-
-    if ($waSetting) {
-        $waSetting->update($request->only([
-            'api_key', 
-            'phone_number', 
-            'wa_template_new_order'
-        ]));
-        
-        // Reset status koneksi jika ada perubahan API Key atau Nomor (opsional)
-        if ($request->has('api_key') || $request->has('phone_number')) {
-            $waSetting->update(['connection_status' => 'disconnected']);
-        }
-    }
+    $formattedDistribution = $distribution->map(function ($item) {
+        return [
+            'status' => $item->status,
+            'count' => (int) $item->count
+        ];
+    });
 
     return response()->json([
         'success' => true,
-        'message' => 'Konfigurasi WhatsApp berhasil disimpan'
-    ]);
-}
-```
-
-### 4. Method `testWhatsApp` (Test Koneksi)
-```php
-public function testWhatsApp()
-{
-    $userId = Auth::id();
-    $waSetting = WaSetting::where('user_id', $userId)->first();
-
-    if (!$waSetting || !$waSetting->api_key) {
-        return response()->json([
-            'success' => false,
-            'message' => 'API Key belum dikonfigurasi'
-        ], 400);
-    }
-
-    // TODO: Ganti URL dan request body sesuai dengan API Provider WhatsApp yang digunakan
-    // Contoh sederhana menggunakan Http Client:
-    /*
-    try {
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $waSetting->api_key
-        ])->post('https://api.whatsapp-provider.com/v1/test');
-
-        if ($response->successful()) {
-            $waSetting->update(['connection_status' => 'connected']);
-            return response()->json([
-                'success' => true, 
-                'message' => 'Koneksi ke provider WhatsApp berhasil'
-            ]);
-        }
-        
-        $waSetting->update(['connection_status' => 'failed']);
-        return response()->json([
-            'success' => false, 
-            'message' => 'Gagal terhubung ke provider'
-        ], 400);
-        
-    } catch (\Exception $e) {
-        $waSetting->update(['connection_status' => 'failed']);
-        return response()->json([
-            'success' => false, 
-            'message' => 'Terjadi kesalahan saat test koneksi: ' . $e->getMessage()
-        ], 500);
-    }
-    */
-
-    // Placeholder response untuk saat ini
-    return response()->json([
-        'success' => true, 
-        'message' => 'Koneksi ke provider WhatsApp berhasil (Simulasi)'
+        'data' => $formattedDistribution
     ]);
 }
 ```
@@ -221,10 +155,9 @@ public function testWhatsApp()
 
 ## Checklist Eksekusi (Untuk Junior/AI)
 
-- [ ] Jalankan command pembuatan controller `SettingController`.
-- [ ] Daftarkan 4 route settings di `routes/api.php` di bawah middleware `auth:sanctum`.
-- [ ] Implementasikan method `index` menggunakan `firstOrCreate` untuk inisiasi awal jika row belum ada di DB.
-- [ ] Implementasikan method `updatePreferences` dengan memvalidasi tipe boolean dan string enum.
-- [ ] Implementasikan method `updateWhatsApp` dan pastikan data tersimpan.
-- [ ] Implementasikan method `testWhatsApp` (termasuk try-catch boilerplate untuk HTTP Request).
+- [ ] Jalankan command pembuatan controller `AnalyticsController`.
+- [ ] Daftarkan 3 route analytics di `routes/api.php` di bawah middleware `auth:sanctum`.
+- [ ] Tulis logika `summary` menggunakan fungsi agregasi Eloquent (`count()`).
+- [ ] Tulis logika `trend` menggunakan query builder dan raw DB expression untuk grouping per tanggal.
+- [ ] Tulis logika `statusDistribution` menggunakan Group By pada status submission.
 - [ ] Jalankan formatter PHP Pint (`vendor/bin/pint --dirty --format agent`).
