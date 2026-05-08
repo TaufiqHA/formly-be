@@ -21,7 +21,7 @@ class FormFieldFactory extends Factory
         return [
             'form_id' => Form::factory(),
             'label' => $this->faker->word(),
-            'field_type' => $this->faker->randomElement(['text', 'textarea', 'radio', 'checkbox', 'select']),
+            'field_type' => $this->faker->randomElement(['text', 'para', 'drop', 'check', 'radio', 'email', 'phone', 'address']),
             'placeholder' => $this->faker->sentence(),
             'is_required' => $this->faker->boolean(),
             'options' => null,
