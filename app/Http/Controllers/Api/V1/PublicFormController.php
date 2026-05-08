@@ -58,6 +58,8 @@ class PublicFormController extends Controller
     {
         $request->validate([
             'values' => 'required|array',
+            'customer_name' => 'nullable|string|max:255',
+            'customer_phone' => 'nullable|string|max:50',
         ]);
 
         $form = Form::with('fields')->where('slug', $slug)->first();
@@ -77,6 +79,8 @@ class PublicFormController extends Controller
                 $submission = Submission::create([
                     'form_id' => $form->id,
                     'submission_number' => $submissionNumber,
+                    'customer_name' => $request->input('customer_name'),
+                    'customer_phone' => $request->input('customer_phone'),
                     'status' => 'new',
                     'ip_address' => $request->ip(),
                     'submitted_at' => now(),
