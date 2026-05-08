@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\FormController;
 use App\Http\Controllers\Api\V1\FormFieldController;
 use App\Http\Controllers\Api\V1\PublicFormController;
+use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\IntegrationController;
 use Illuminate\Support\Facades\Route;
@@ -21,8 +22,9 @@ Route::prefix('v1')->group(function () {
         });
     });
 
-    // Forms API
+    // Protected API
     Route::middleware('auth:sanctum')->group(function () {
+        // Forms API
         Route::apiResource('forms', FormController::class);
         Route::patch('forms/{id}/status', [FormController::class, 'updateStatus']);
         Route::get('forms/{id}/stats', [FormController::class, 'stats']);
@@ -39,10 +41,19 @@ Route::prefix('v1')->group(function () {
             Route::post('/{id}/notes', [SubmissionController::class, 'addNote']);
             Route::post('/{id}/resend-wa', [SubmissionController::class, 'resendWa']);
         });
+
+        // Settings
+        Route::prefix('settings')->group(function () {
+            Route::get('/', [SettingController::class, 'index']);
+            Route::put('/', [SettingController::class, 'updatePreferences']);
+            Route::put('/whatsapp', [SettingController::class, 'updateWhatsApp']);
+            Route::post('/whatsapp/test', [SettingController::class, 'testWhatsApp']);
+        });
     });
 
     // Public Routes (Tanpa Auth)
     Route::prefix('public/forms')->group(function () {
+        // ... (Public routes tetap di sini)
         Route::get('/{slug}', [PublicFormController::class, 'show']);
         Route::post('/{slug}/submit', [PublicFormController::class, 'submit']);
     });
