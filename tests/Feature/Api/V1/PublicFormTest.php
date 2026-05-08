@@ -5,7 +5,6 @@ namespace Tests\Feature\Api\V1;
 use App\Models\Form;
 use App\Models\FormField;
 use App\Models\Submission;
-use App\Models\SubmissionValue;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -34,7 +33,7 @@ class PublicFormTest extends TestCase
             'form_id' => $form->id,
         ]);
 
-        $response = $this->getJson("/api/v1/public/forms/test-form");
+        $response = $this->getJson('/api/v1/public/forms/test-form');
 
         $response->assertStatus(200)
             ->assertJson([
@@ -54,7 +53,7 @@ class PublicFormTest extends TestCase
             'status' => 'draft',
         ]);
 
-        $response = $this->getJson("/api/v1/public/forms/draft-form");
+        $response = $this->getJson('/api/v1/public/forms/draft-form');
 
         $response->assertStatus(404);
     }
@@ -80,13 +79,15 @@ class PublicFormTest extends TestCase
         ]);
 
         $payload = [
+            'customer_name' => 'John Doe',
+            'customer_phone' => '081234567890',
             'values' => [
                 $field1->id => 'John Doe',
                 $field2->id => ['Coding', 'Reading'],
             ],
         ];
 
-        $response = $this->postJson("/api/v1/public/forms/submit-form/submit", $payload);
+        $response = $this->postJson('/api/v1/public/forms/submit-form/submit', $payload);
 
         $response->assertStatus(201)
             ->assertJson([
@@ -96,6 +97,8 @@ class PublicFormTest extends TestCase
 
         $this->assertDatabaseHas('submissions', [
             'form_id' => $form->id,
+            'customer_name' => 'John Doe',
+            'customer_phone' => '081234567890',
             'status' => 'new',
         ]);
 
