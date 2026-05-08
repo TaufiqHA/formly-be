@@ -1,187 +1,242 @@
-# Perencanaan Implementasi Endpoint Public (Customer-Facing)
+# Perencanaan Implementasi Endpoint Submissions
 
-Dokumen ini berisi langkah-langkah detail untuk mengimplementasikan endpoint API Public (untuk customer) pada project Formly. Langkah-langkah ini disusun agar sangat mudah diikuti, baik oleh Junior Developer maupun oleh AI Assistant.
+Dokumen ini berisi langkah-langkah teknis untuk mengimplementasikan controller dan endpoint **Submissions** pada project Formly. Langkah-langkah ini disusun sesederhana mungkin agar mudah dipahami dan dieksekusi langsung oleh Junior Developer atau AI Model.
 
-Referensi dari `API_REFERENCE.md` bagian **4. Public**.
+Referensi dari `API_REFERENCE.md` bagian **5. Submissions**.
 
 ---
 
 ## Tahap 1: Pembuatan Controller
 
-Kita butuh satu controller untuk menangani endpoint public ini.
+Kita akan membuat satu controller utama untuk mengelola seluruh operasi submissions.
 
 **Langkah:**
 1. Buka terminal/command prompt.
 2. Jalankan perintah artisan berikut:
    ```bash
-   php artisan make:controller Api/V1/PublicFormController
+   php artisan make:controller Api/V1/SubmissionController
    ```
 
 ---
 
-## Tahap 2: Mendaftarkan Route
+## Tahap 2: Mendaftarkan Route API
 
-Buka file `routes/api.php` dan tambahkan route baru untuk endpoint public. Pastikan route ini **TIDAK** dibungkus dalam middleware `auth:sanctum` karena ini untuk pengunjung publik.
+Endpoint submissions wajib diproteksi dengan middleware `auth:sanctum`.
 
 **Langkah:**
-Tambahkan kode berikut di dalam `routes/api.php`:
+Buka `routes/api.php` dan tambahkan baris berikut di dalam grup `auth:sanctum`:
+
 ```php
-use App\Http\Controllers\Api\V1\PublicFormController;
+use App\Http\Controllers\Api\V1\SubmissionController;
 
-Route::prefix('v1')->group(function () {
-    // ... route auth atau admin lainnya ...
-
-    // Public Routes (Tanpa Auth)
-    Route::prefix('public/forms')->group(function () {
-        Route::get('/{slug}', [PublicFormController::class, 'show']);
-        Route::post('/{slug}/submit', [PublicFormController::class, 'submit']);
+Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+    // ... rute lain seperti forms ...
+    
+    // Submissions
+    Route::prefix('submissions')->group(function () {
+        Route::get('/', [SubmissionController::class, 'index']);
+        Route::get('/export', [SubmissionController::class, 'export']); // Harus ditaruh sebelum /{id}
+        Route::get('/{id}', [SubmissionController::class, 'show']);
+        Route::patch('/{id}/status', [SubmissionController::class, 'updateStatus']);
+        Route::post('/{id}/notes', [SubmissionController::class, 'addNote']);
+        Route::post('/{id}/resend-wa', [SubmissionController::class, 'resendWa']);
     });
 });
 ```
 
 ---
 
-## Tahap 3: Implementasi GET `/public/forms/{slug}` (Mengambil Konfigurasi Form)
+## Tahap 3: Implementasi Method pada `SubmissionController`
 
-Buka file `app/Http/Controllers/Api/V1/PublicFormController.php` dan buat method `show`.
+Buka file `app/Http/Controllers/Api/V1/SubmissionController.php`. Tambahkan import model-model yang diperlukan:
+```php
+use App\Models\Submission;
+use App\Models\SubmissionNote;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+```
 
-**Langkah:**
-1. Tambahkan use statement untuk Model `Form`:
-   ```php
-   use App\Models\Form;
-   ```
-2. Buat method `show($slug)`:
-   ```php
-   public function show($slug)
-   {
-       // 1. Cari form berdasarkan slug beserta relasi fields-nya
-       // Pastikan hanya form yang 'active' yang bisa diakses (opsional sesuai bisnis logik)
-       $form = Form::with(['fields' => function ($query) {
-           $query->orderBy('sort_order', 'asc'); // Urutkan field
-       }])->where('slug', $slug)->first();
+### 1. Method `index` (List Submissions dengan Pagination & Filter)
+```php
+public function index(Request $request)
+{
+    $query = Submission::with('form:id,title'); // Asumsi ada relasi form()
 
-       // 2. Jika tidak ditemukan, kembalikan error 404
-       if (!$form) {
-           return response()->json([
-               'success' => false,
-               'message' => 'Form tidak ditemukan'
-           ], 404);
-       }
+    // 1. Filter status
+    if ($request->has('status')) {
+        $query->where('status', $request->status);
+    }
 
-       // 3. Format response sesuai API_REFERENCE.md
-       return response()->json([
-           'success' => true,
-           'data' => [
-               'id' => $form->id,
-               'title' => $form->title,
-               'description' => $form->description,
-               'fields' => $form->fields->map(function ($field) {
-                   return [
-                       'id' => $field->id,
-                       'label' => $field->label,
-                       'field_type' => $field->field_type,
-                       'is_required' => $field->is_required,
-                       'options' => $field->options
-                   ];
-               })
-           ]
-       ]);
-   }
-   ```
+    // 2. Search berdasarkan customer_name atau submission_number
+    if ($request->has('search')) {
+        $search = $request->search;
+        $query->where(function ($q) use ($search) {
+            $q->where('customer_name', 'like', "%{$search}%")
+              ->orWhere('submission_number', 'like', "%{$search}%");
+        });
+    }
 
----
+    // 3. Pagination (default limit 25)
+    $limit = $request->input('limit', 25);
+    $submissions = $query->latest('submitted_at')->paginate($limit);
 
-## Tahap 4: Implementasi POST `/public/forms/{slug}/submit` (Submit Form)
+    // 4. Format Output
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'items' => $submissions->map(function ($sub) {
+                return [
+                    'id' => $sub->id,
+                    'submission_number' => $sub->submission_number,
+                    'customer_name' => $sub->customer_name, // Pastikan field ini ada di tabel/disimpan saat form submit
+                    'form_title' => $sub->form ? $sub->form->title : null,
+                    'status' => $sub->status,
+                    'submitted_at' => $sub->submitted_at ?? $sub->created_at,
+                ];
+            }),
+            'pagination' => [
+                'page' => $submissions->currentPage(),
+                'limit' => $submissions->perPage(),
+                'total' => $submissions->total()
+            ]
+        ]
+    ]);
+}
+```
 
-Method `submit` akan menangani pengiriman data oleh user. Kita butuh Model `Submission` dan `SubmissionValue`, serta `DB` facade untuk transaksi.
+### 2. Method `show` (Detail Submission)
+```php
+public function show($id)
+{
+    // Eager load relasi yang diperlukan (values, notes.user)
+    $submission = Submission::with([
+        'values.formField:id,label', // asumsi model SubmissionValue memiliki relasi formField
+        'notes.user:id,name'         // asumsi model SubmissionNote memiliki relasi user
+    ])->find($id);
 
-**Langkah:**
-1. Tambahkan use statement di atas file `PublicFormController.php`:
-   ```php
-   use App\Models\Submission;
-   use App\Models\SubmissionValue;
-   use Illuminate\Http\Request;
-   use Illuminate\Support\Facades\DB;
-   use Illuminate\Support\Str;
-   ```
-2. Buat method `submit(Request $request, $slug)`:
-   ```php
-   public function submit(Request $request, $slug)
-   {
-       // 1. Validasi input request (pastikan ada field 'values')
-       $request->validate([
-           'values' => 'required|array'
-       ]);
+    if (!$submission) {
+        return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+    }
 
-       // 2. Cari Form berdasarkan slug
-       $form = Form::where('slug', $slug)->first();
-       if (!$form) {
-           return response()->json([
-               'success' => false,
-               'message' => 'Form tidak ditemukan'
-           ], 404);
-       }
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'id' => $submission->id,
+            'submission_number' => $submission->submission_number,
+            'customer_name' => $submission->customer_name,
+            'customer_phone' => $submission->customer_phone,
+            'status' => $submission->status,
+            'submitted_at' => $submission->submitted_at ?? $submission->created_at,
+            'values' => $submission->values->map(function ($val) {
+                return [
+                    'field_label' => $val->formField ? $val->formField->label : 'Unknown Field',
+                    'value_text' => $val->value_text,
+                    'value_json' => $val->value_json,
+                ];
+            }),
+            'notes' => $submission->notes->map(function ($note) {
+                return [
+                    'id' => $note->id,
+                    'user_name' => $note->user ? $note->user->name : 'Sistem',
+                    'content' => $note->content,
+                    'created_at' => $note->created_at,
+                ];
+            })
+        ]
+    ]);
+}
+```
 
-       try {
-           DB::beginTransaction();
+### 3. Method `updateStatus` (Ubah Status Submission)
+```php
+public function updateStatus(Request $request, $id)
+{
+    $request->validate(['status' => 'required|string']);
 
-           // 3. Generate Submission Number (contoh: SUB-2023-XXXX)
-           $submissionNumber = 'SUB-' . date('Y') . '-' . strtoupper(Str::random(4));
+    $submission = Submission::find($id);
+    if (!$submission) {
+        return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+    }
 
-           // 4. Simpan ke tabel submissions
-           $submission = Submission::create([
-               'form_id' => $form->id,
-               'submission_number' => $submissionNumber,
-               'status' => 'new',
-               // (Opsional) extract customer name/phone jika field ID diketahui, 
-               // atau biarkan null dulu lalu diupdate lewat job/event.
-           ]);
+    $submission->status = $request->status;
+    $submission->save();
 
-           // 5. Looping data 'values' dan simpan ke submission_values
-           // Bentuk request: "values": { "field-uuid-1": "Budi Santoso", "field-uuid-2": ["Basic"] }
-           foreach ($request->values as $fieldId => $value) {
-               $isJson = is_array($value);
-               
-               SubmissionValue::create([
-                   'submission_id' => $submission->id,
-                   'form_field_id' => $fieldId,
-                   'value_text' => $isJson ? null : (string) $value,
-                   'value_json' => $isJson ? $value : null,
-               ]);
-           }
+    return response()->json([
+        'success' => true,
+        'message' => 'Status diperbarui'
+    ]);
+}
+```
 
-           DB::commit();
+### 4. Method `addNote` (Tambah Catatan Internal)
+```php
+public function addNote(Request $request, $id)
+{
+    $request->validate(['content' => 'required|string']);
 
-           // 6. Kembalikan response berhasil
-           return response()->json([
-               'success' => true,
-               'data' => [
-                   'submission_id' => $submission->id,
-                   'submission_number' => $submission->submission_number,
-                   'status' => 'new',
-                   // Opsional: Generate WA Redirect URL jika disetup
-                   'wa_redirect_url' => null 
-               ],
-               'message' => 'Pesanan berhasil dikirim'
-           ], 201);
+    $submission = Submission::find($id);
+    if (!$submission) {
+        return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+    }
 
-       } catch (\Exception $e) {
-           DB::rollBack();
-           return response()->json([
-               'success' => false,
-               'message' => 'Gagal mengirim form: ' . $e->getMessage()
-           ], 500);
-       }
-   }
-   ```
+    // Pastikan user sedang login
+    $userId = Auth::id();
+
+    SubmissionNote::create([
+        'submission_id' => $submission->id,
+        'user_id' => $userId,
+        'content' => $request->content
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Catatan ditambahkan'
+    ], 201);
+}
+```
+
+### 5. Method `resendWa` (Kirim Ulang Notifikasi WA)
+```php
+public function resendWa($id)
+{
+    $submission = Submission::find($id);
+    if (!$submission) {
+        return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+    }
+
+    // TODO: Dispatch Job pengiriman WA di sini. Contoh:
+    // SendWhatsAppNotification::dispatch($submission);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Notifikasi WhatsApp dimasukkan ke antrean'
+    ]);
+}
+```
+
+### 6. Method `export` (Download CSV/Excel)
+```php
+public function export(Request $request)
+{
+    // TODO: Implementasi export file bisa menggunakan package seperti maatwebsite/excel
+    // Untuk tahap ini, kita hanya return placeholder.
+    
+    return response()->json([
+        'success' => false,
+        'message' => 'Fitur export sedang dalam pengembangan'
+    ], 501);
+}
+```
 
 ---
 
 ## Checklist Eksekusi (Untuk Junior/AI)
 
-- [ ] Jalankan command pembuatan controller.
-- [ ] Daftarkan 2 routes public di `routes/api.php` tanpa auth middleware.
-- [ ] Tulis code pada method `show` di `PublicFormController`.
-- [ ] Tulis code pada method `submit` di `PublicFormController`.
-- [ ] (Opsional) Jalankan format `vendor/bin/pint --dirty --format agent`.
-- [ ] (Opsional) Lakukan test manual dengan Postman atau buat unit test `php artisan make:test PublicFormApiTest`.
+- [ ] Jalankan command pembuatan controller `SubmissionController`.
+- [ ] Daftarkan 6 route submission di `routes/api.php` di bawah middleware `auth:sanctum`.
+- [ ] Implementasikan method `index` (pastikan fitur filter dan search berfungsi).
+- [ ] Implementasikan method `show` (pastikan eager loading `values` dan `notes` di-load).
+- [ ] Implementasikan method `updateStatus` dan `addNote`.
+- [ ] Implementasikan method `resendWa` (opsional: panggil queue job jika sudah siap).
+- [ ] Implementasikan method `export` (bisa return response 501 Not Implemented sementara).
+- [ ] Jalankan formatter PHP Pint (`vendor/bin/pint --dirty --format agent`).
