@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\FormController;
 use App\Http\Controllers\Api\V1\FormFieldController;
 use App\Http\Controllers\Api\V1\PublicFormController;
+use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\IntegrationController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +29,16 @@ Route::prefix('v1')->group(function () {
 
         // Form Fields API
         Route::put('forms/{id}/fields', [FormFieldController::class, 'updateBulk']);
+
+        // Submissions
+        Route::prefix('submissions')->group(function () {
+            Route::get('/', [SubmissionController::class, 'index']);
+            Route::get('/export', [SubmissionController::class, 'export']);
+            Route::get('/{id}', [SubmissionController::class, 'show']);
+            Route::patch('/{id}/status', [SubmissionController::class, 'updateStatus']);
+            Route::post('/{id}/notes', [SubmissionController::class, 'addNote']);
+            Route::post('/{id}/resend-wa', [SubmissionController::class, 'resendWa']);
+        });
     });
 
     // Public Routes (Tanpa Auth)
