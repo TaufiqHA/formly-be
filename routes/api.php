@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\FormController;
 use App\Http\Controllers\Api\V1\FormFieldController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PublicFormController;
 use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\Api\V1\SubmissionController;
@@ -43,6 +44,12 @@ Route::prefix('v1')->group(function () {
             Route::patch('/{id}/status', [SubmissionController::class, 'updateStatus']);
             Route::post('/{id}/notes', [SubmissionController::class, 'addNote']);
             Route::post('/{id}/resend-wa', [SubmissionController::class, 'resendWa']);
+        });
+
+        // Notifications
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::patch('/mark-as-read/{id?}', [NotificationController::class, 'markAsRead']);
         });
 
         // Settings
