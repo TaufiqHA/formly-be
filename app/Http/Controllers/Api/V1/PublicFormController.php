@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Form;
 use App\Models\Submission;
 use App\Models\SubmissionValue;
+use App\Notifications\NewSubmissionNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -72,7 +73,7 @@ class PublicFormController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($request, $form) {
+            $submission = DB::transaction(function () use ($request, $form) {
                 // Generate Submission Number (SUB-YYYY-RAND)
                 $submissionNumber = 'SUB-'.date('Y').'-'.strtoupper(Str::random(6));
 
@@ -106,17 +107,24 @@ class PublicFormController extends Controller
                     ]);
                 }
 
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'submission_id' => $submission->id,
-                        'submission_number' => $submission->submission_number,
-                        'status' => $submission->status,
-                        'wa_redirect_url' => null, // Placeholder for future feature
-                    ],
-                    'message' => 'Pesanan berhasil dikirim',
-                ], 201);
+                return $submission;
             });
+
+            // Memicu Notifikasi ke Pemilik Form
+            if ($form->user) {
+                $form->user->notify(new NewSubmissionNotification($submission));
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'submission_id' => $submission->id,
+                    'submission_number' => $submission->submission_number,
+                    'status' => $submission->status,
+                    'wa_redirect_url' => null, // Placeholder for future feature
+                ],
+                'message' => 'Pesanan berhasil dikirim',
+            ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
