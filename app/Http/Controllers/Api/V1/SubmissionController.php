@@ -16,7 +16,10 @@ class SubmissionController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Submission::with('form:id,title');
+        $userId = Auth::id();
+        $query = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->with('form:id,title');
 
         // 1. Filter status
         if ($request->has('status')) {
@@ -65,8 +68,12 @@ class SubmissionController extends Controller
      */
     public function show(string $id): JsonResponse
     {
+        $userId = Auth::id();
+
         // Eager load relasi yang diperlukan (values, notes.user)
-        $submission = Submission::with([
+        $submission = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->with([
             'values.field:id,label',
             'notes.user:id,name',
         ])->find($id);
@@ -115,7 +122,11 @@ class SubmissionController extends Controller
     {
         $request->validate(['status' => 'required|string']);
 
-        $submission = Submission::find($id);
+        $userId = Auth::id();
+        $submission = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->find($id);
+
         if (! $submission) {
             return response()->json([
                 'success' => false,
@@ -139,15 +150,17 @@ class SubmissionController extends Controller
     {
         $request->validate(['content' => 'required|string']);
 
-        $submission = Submission::find($id);
+        $userId = Auth::id();
+        $submission = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->find($id);
+
         if (! $submission) {
             return response()->json([
                 'success' => false,
                 'message' => 'Data tidak ditemukan',
             ], 404);
         }
-
-        $userId = Auth::id();
 
         SubmissionNote::create([
             'submission_id' => $submission->id,
@@ -166,7 +179,11 @@ class SubmissionController extends Controller
      */
     public function resendWa(string $id): JsonResponse
     {
-        $submission = Submission::find($id);
+        $userId = Auth::id();
+        $submission = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->find($id);
+
         if (! $submission) {
             return response()->json([
                 'success' => false,
@@ -189,7 +206,10 @@ class SubmissionController extends Controller
     public function export(Request $request)
     {
         // 1. Ambil query dengan filter (sama dengan index)
-        $query = Submission::with('form:id,title');
+        $userId = Auth::id();
+        $query = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->with('form:id,title');
 
         if ($request->has('status')) {
             $query->where('status', $request->status);

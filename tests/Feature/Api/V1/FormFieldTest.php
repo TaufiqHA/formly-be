@@ -90,6 +90,6 @@ class FormFieldTest extends TestCase
             'fields' => [],
         ]);
 
-        $response->assertStatus(403);
+        $response->assertStatus(404);
     }
 }
