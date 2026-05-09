@@ -179,7 +179,18 @@ class SubmissionTest extends TestCase
         Sanctum::actingAs($this->user);
 
         $form = Form::factory()->create(['user_id' => $this->user->id]);
-        Submission::factory()->count(3)->create(['form_id' => $form->id]);
+        $field = \App\Models\FormField::factory()->create([
+            'form_id' => $form->id,
+            'label' => 'Dynamic Question'
+        ]);
+        
+        $submission = Submission::factory()->create(['form_id' => $form->id]);
+        \App\Models\SubmissionValue::factory()->create([
+            'submission_id' => $submission->id,
+            'form_field_id' => $field->id,
+            'field_label' => 'Dynamic Question',
+            'value_text' => 'Dynamic Answer'
+        ]);
 
         $response = $this->get('/api/v1/submissions/export');
 
@@ -187,7 +198,15 @@ class SubmissionTest extends TestCase
             ->assertHeader('Content-Type', 'text/csv; charset=utf-8');
 
         $content = $response->streamedContent();
+        
+        // Verify static headers
         $this->assertStringContainsString('ID,"Submission Number","Customer Name","Customer Phone","Form Title",Status,"Submitted At"', $content);
+        
+        // Verify dynamic header
+        $this->assertStringContainsString('"Dynamic Question"', $content);
+        
+        // Verify dynamic value
+        $this->assertStringContainsString('"Dynamic Answer"', $content);
     }
 
     public function test_cannot_list_other_users_submissions(): void
