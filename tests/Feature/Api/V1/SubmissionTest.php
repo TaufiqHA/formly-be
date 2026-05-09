@@ -67,6 +67,27 @@ class SubmissionTest extends TestCase
             ->assertJsonPath('data.items.0.status', 'new');
     }
 
+    public function test_can_filter_submissions_by_form_id(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        $form1 = Form::factory()->create(['user_id' => $this->user->id, 'title' => 'Form 1']);
+        $form2 = Form::factory()->create(['user_id' => $this->user->id, 'title' => 'Form 2']);
+        
+        Submission::factory()->count(3)->create(['form_id' => $form1->id]);
+        Submission::factory()->count(2)->create(['form_id' => $form2->id]);
+
+        $response = $this->getJson("/api/v1/submissions?form_id={$form1->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonCount(3, 'data.items');
+            
+        $response = $this->getJson("/api/v1/submissions?form_id={$form2->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonCount(2, 'data.items');
+    }
+
     public function test_can_search_submissions(): void
     {
         Sanctum::actingAs($this->user);
