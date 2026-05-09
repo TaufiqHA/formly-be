@@ -41,6 +41,7 @@ class SubmissionTest extends TestCase
                             'id',
                             'submission_number',
                             'customer_name',
+                            'customer_phone',
                             'form_title',
                             'status',
                             'submitted_at',
@@ -173,12 +174,19 @@ class SubmissionTest extends TestCase
             ->assertJson(['message' => 'Notifikasi WhatsApp dimasukkan ke antrean']);
     }
 
-    public function test_export_returns_501(): void
+    public function test_can_export_submissions(): void
     {
         Sanctum::actingAs($this->user);
 
-        $response = $this->getJson('/api/v1/submissions/export');
+        $form = Form::factory()->create(['user_id' => $this->user->id]);
+        Submission::factory()->count(3)->create(['form_id' => $form->id]);
 
-        $response->assertStatus(501);
+        $response = $this->get('/api/v1/submissions/export');
+
+        $response->assertStatus(200)
+            ->assertHeader('Content-Type', 'text/csv; charset=utf-8');
+
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('ID,"Submission Number","Customer Name","Customer Phone","Form Title",Status,"Submitted At"', $content);
     }
 }

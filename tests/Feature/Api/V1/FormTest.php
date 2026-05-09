@@ -144,4 +144,79 @@ class FormTest extends TestCase
                 'data' => ['total_views', 'total_submissions', 'conversion_rate']
             ]);
     }
+
+    public function test_can_filter_forms_by_status(): void
+    {
+        Form::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'active',
+            'title' => 'Active Form'
+        ]);
+        Form::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'draft',
+            'title' => 'Draft Form'
+        ]);
+
+        Sanctum::actingAs($this->user);
+
+        // Test filter active
+        $response = $this->getJson('/api/v1/forms?status=active');
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Active Form');
+
+        // Test filter draft
+        $response = $this->getJson('/api/v1/forms?status=draft');
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Draft Form');
+    }
+
+    public function test_can_search_forms_by_title(): void
+    {
+        Form::factory()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Survey Kepuasan Pelanggan'
+        ]);
+        Form::factory()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Formulir Pemesanan Kopi'
+        ]);
+
+        Sanctum::actingAs($this->user);
+
+        // Test search "kepuasan"
+        $response = $this->getJson('/api/v1/forms?search=kepuasan');
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Survey Kepuasan Pelanggan');
+
+        // Test search "kopi"
+        $response = $this->getJson('/api/v1/forms?search=kopi');
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Formulir Pemesanan Kopi');
+    }
+
+    public function test_can_combine_search_and_filter(): void
+    {
+        Form::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'active',
+            'title' => 'Order Kopi Active'
+        ]);
+        Form::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'draft',
+            'title' => 'Order Kopi Draft'
+        ]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->getJson('/api/v1/forms?status=active&search=kopi');
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Order Kopi Active');
+    }
 }

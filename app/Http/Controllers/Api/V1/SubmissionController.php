@@ -45,6 +45,7 @@ class SubmissionController extends Controller
                         'id' => $sub->id,
                         'submission_number' => $sub->submission_number,
                         'customer_name' => $sub->customer_name,
+                        'customer_phone' => $sub->customer_phone,
                         'form_title' => $sub->form ? $sub->form->title : null,
                         'status' => $sub->status,
                         'submitted_at' => $sub->submitted_at ?? $sub->created_at,
@@ -185,11 +186,58 @@ class SubmissionController extends Controller
     /**
      * Export submissions.
      */
-    public function export(Request $request): JsonResponse
+    public function export(Request $request)
     {
-        return response()->json([
-            'success' => false,
-            'message' => 'Fitur export sedang dalam pengembangan',
-        ], 501);
+        // 1. Ambil query dengan filter (sama dengan index)
+        $query = Submission::with('form:id,title');
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('customer_name', 'like', "%{$search}%")
+                    ->orWhere('submission_number', 'like', "%{$search}%");
+            });
+        }
+
+        $submissions = $query->latest('submitted_at')->get();
+
+        // 2. Buat response stream untuk CSV
+        $fileName = 'submissions_export_'.date('Ymd_His').'.csv';
+
+        $headers = [
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=$fileName",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function () use ($submissions) {
+            $file = fopen('php://output', 'w');
+
+            // Tulis Header CSV
+            fputcsv($file, ['ID', 'Submission Number', 'Customer Name', 'Customer Phone', 'Form Title', 'Status', 'Submitted At']);
+
+            // Tulis baris data
+            foreach ($submissions as $sub) {
+                fputcsv($file, [
+                    $sub->id,
+                    $sub->submission_number,
+                    $sub->customer_name,
+                    $sub->customer_phone,
+                    $sub->form ? $sub->form->title : '',
+                    $sub->status,
+                    $sub->submitted_at ?? $sub->created_at,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return new \Symfony\Component\HttpFoundation\StreamedResponse($callback, 200, $headers);
     }
 }
