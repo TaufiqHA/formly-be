@@ -21,25 +21,31 @@ class SubmissionController extends Controller
             $q->where('user_id', $userId);
         })->with('form:id,title');
 
-        // 1. Filter status
-        if ($request->has('status')) {
+        // 1. Filter berdasarkan form_id
+        if ($request->filled('form_id')) {
+            $query->where('form_id', $request->form_id);
+        }
+
+        // 2. Filter status
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // 2. Search berdasarkan customer_name atau submission_number
-        if ($request->has('search')) {
+        // 3. Search berdasarkan customer_name, customer_phone, atau submission_number
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('customer_name', 'like', "%{$search}%")
+                    ->orWhere('customer_phone', 'like', "%{$search}%")
                     ->orWhere('submission_number', 'like', "%{$search}%");
             });
         }
 
-        // 3. Pagination (default limit 25)
+        // 4. Pagination (default limit 25)
         $limit = $request->input('limit', 25);
         $submissions = $query->latest('submitted_at')->paginate($limit);
 
-        // 4. Format Output
+        // 5. Format Output
         return response()->json([
             'success' => true,
             'data' => [
@@ -212,14 +218,20 @@ class SubmissionController extends Controller
             $q->where('user_id', $userId);
         })->with(['form:id,title', 'values.field']); // [UPDATE] Tambahkan 'values.field'
 
-        if ($request->has('status')) {
+        // Filter berdasarkan form_id
+        if ($request->filled('form_id')) {
+            $query->where('form_id', $request->form_id);
+        }
+
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('customer_name', 'like', "%{$search}%")
+                    ->orWhere('customer_phone', 'like', "%{$search}%")
                     ->orWhere('submission_number', 'like', "%{$search}%");
             });
         }
