@@ -28,16 +28,8 @@ class FormFieldController extends Controller
             'fields.*.sort_order' => 'required|integer',
         ]);
 
-        // 2. Pastikan form ada
-        $form = Form::findOrFail($id);
-
-        // Optional: Check ownership
-        if ($form->user_id !== $request->user()->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized',
-            ], 403);
-        }
+        // 2. Pastikan form ada dan milik user tersebut
+        $form = Form::where('user_id', $request->user()->id)->findOrFail($id);
 
         $fieldsData = $validated['fields'] ?? [];
 

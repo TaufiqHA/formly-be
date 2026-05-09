@@ -189,4 +189,31 @@ class SubmissionTest extends TestCase
         $content = $response->streamedContent();
         $this->assertStringContainsString('ID,"Submission Number","Customer Name","Customer Phone","Form Title",Status,"Submitted At"', $content);
     }
+
+    public function test_cannot_list_other_users_submissions(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherForm = Form::factory()->create(['user_id' => $otherUser->id]);
+        Submission::factory()->count(3)->create(['form_id' => $otherForm->id]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->getJson('/api/v1/submissions');
+
+        $response->assertStatus(200)
+            ->assertJsonCount(0, 'data.items');
+    }
+
+    public function test_cannot_access_other_users_submission_detail(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherForm = Form::factory()->create(['user_id' => $otherUser->id]);
+        $otherSubmission = Submission::factory()->create(['form_id' => $otherForm->id]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->getJson("/api/v1/submissions/{$otherSubmission->id}");
+
+        $response->assertStatus(404);
+    }
 }

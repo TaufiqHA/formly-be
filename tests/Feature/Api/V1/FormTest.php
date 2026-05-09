@@ -219,4 +219,29 @@ class FormTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.title', 'Order Kopi Active');
     }
+
+    public function test_cannot_access_other_users_form(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherForm = Form::factory()->create(['user_id' => $otherUser->id]);
+
+        Sanctum::actingAs($this->user);
+
+        // Test show
+        $this->getJson("/api/v1/forms/{$otherForm->id}")->assertStatus(404);
+
+        // Test update
+        $this->putJson("/api/v1/forms/{$otherForm->id}", ['title' => 'Hacked'])
+            ->assertStatus(404);
+
+        // Test delete
+        $this->deleteJson("/api/v1/forms/{$otherForm->id}")->assertStatus(404);
+
+        // Test update status
+        $this->patchJson("/api/v1/forms/{$otherForm->id}/status", ['status' => 'active'])
+            ->assertStatus(404);
+
+        // Test stats
+        $this->getJson("/api/v1/forms/{$otherForm->id}/stats")->assertStatus(404);
+    }
 }

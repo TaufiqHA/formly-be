@@ -63,7 +63,7 @@ class FormController extends Controller
      */
     public function show(string $id): JsonResponse
     {
-        $form = Form::with(['fields' => function ($query) {
+        $form = Form::where('user_id', auth()->id())->with(['fields' => function ($query) {
             $query->orderBy('sort_order', 'asc');
         }])->findOrFail($id);
 
@@ -78,7 +78,7 @@ class FormController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
-        $form = Form::findOrFail($id);
+        $form = Form::where('user_id', auth()->id())->findOrFail($id);
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -98,7 +98,7 @@ class FormController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
-        $form = Form::findOrFail($id);
+        $form = Form::where('user_id', auth()->id())->findOrFail($id);
         $form->delete();
 
         return response()->json([
@@ -112,7 +112,7 @@ class FormController extends Controller
      */
     public function updateStatus(Request $request, string $id): JsonResponse
     {
-        $form = Form::findOrFail($id);
+        $form = Form::where('user_id', auth()->id())->findOrFail($id);
 
         $validated = $request->validate([
             'status' => 'required|in:draft,active',
@@ -132,7 +132,7 @@ class FormController extends Controller
      */
     public function stats(string $id): JsonResponse
     {
-        $form = Form::findOrFail($id);
+        $form = Form::where('user_id', auth()->id())->findOrFail($id);
 
         // Mock data as per planning.md
         $totalViews = 5000;

@@ -17,8 +17,11 @@ class AnalyticsController extends Controller
      */
     public function summary(): JsonResponse
     {
-        $activeForms = Form::where('status', 'active')->count();
-        $totalResponses = Submission::count();
+        $userId = auth()->id();
+        $activeForms = Form::where('user_id', $userId)->where('status', 'active')->count();
+        $totalResponses = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->count();
         $averageConversion = 0; // Placeholder until views table is implemented
 
         return response()->json([
@@ -36,11 +39,14 @@ class AnalyticsController extends Controller
      */
     public function trend(Request $request): JsonResponse
     {
+        $userId = auth()->id();
         $startDate = Carbon::today()->subDays(6);
         $endDate = Carbon::today()->endOfDay();
 
         // Get grouping by date. SQLite uses date()
-        $trends = Submission::select(
+        $trends = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->select(
             DB::raw('date(created_at) as date'),
             DB::raw('count(id) as count')
         )
@@ -72,7 +78,10 @@ class AnalyticsController extends Controller
      */
     public function statusDistribution(): JsonResponse
     {
-        $distribution = Submission::select('status', DB::raw('count(id) as count'))
+        $userId = auth()->id();
+        $distribution = Submission::whereHas('form', function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        })->select('status', DB::raw('count(id) as count'))
             ->groupBy('status')
             ->orderBy('status', 'asc')
             ->get();
