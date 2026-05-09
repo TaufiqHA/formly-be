@@ -18,7 +18,8 @@ class SubmissionValueFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'field_label' => $this->faker->words(3, true),
+            'value_text' => $this->faker->sentence(),
         ];
     }
 }

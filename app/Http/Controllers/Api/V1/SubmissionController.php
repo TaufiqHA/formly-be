@@ -201,15 +201,16 @@ class SubmissionController extends Controller
     }
 
     /**
-     * Export submissions.
+     * Export submissions with dynamic form values.
      */
     public function export(Request $request)
     {
-        // 1. Ambil query dengan filter (sama dengan index)
         $userId = Auth::id();
+
+        // 1. Ambil query dengan filter dan EAGER LOAD relasi values & field
         $query = Submission::whereHas('form', function ($q) use ($userId) {
             $q->where('user_id', $userId);
-        })->with('form:id,title');
+        })->with(['form:id,title', 'values.field']); // [UPDATE] Tambahkan 'values.field'
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
@@ -225,7 +226,18 @@ class SubmissionController extends Controller
 
         $submissions = $query->latest('submitted_at')->get();
 
-        // 2. Buat response stream untuk CSV
+        // 2. Kumpulkan Dynamic Headers (Label Pertanyaan Unik)
+        $dynamicHeaders = [];
+        foreach ($submissions as $sub) {
+            foreach ($sub->values as $val) {
+                $label = $val->field_label ?? ($val->field ? $val->field->label : 'Unknown Field');
+                if (! in_array($label, $dynamicHeaders)) {
+                    $dynamicHeaders[] = $label;
+                }
+            }
+        }
+
+        // 3. Buat response stream untuk CSV
         $fileName = 'submissions_export_'.date('Ymd_His').'.csv';
 
         $headers = [
@@ -236,15 +248,17 @@ class SubmissionController extends Controller
             'Expires' => '0',
         ];
 
-        $callback = function () use ($submissions) {
+        $callback = function () use ($submissions, $dynamicHeaders) {
             $file = fopen('php://output', 'w');
 
-            // Tulis Header CSV
-            fputcsv($file, ['ID', 'Submission Number', 'Customer Name', 'Customer Phone', 'Form Title', 'Status', 'Submitted At']);
+            // 4. Susun Header: Statis + Dinamis
+            $staticHeaders = ['ID', 'Submission Number', 'Customer Name', 'Customer Phone', 'Form Title', 'Status', 'Submitted At'];
+            fputcsv($file, array_merge($staticHeaders, $dynamicHeaders));
 
-            // Tulis baris data
+            // 5. Tulis baris data
             foreach ($submissions as $sub) {
-                fputcsv($file, [
+                // Siapkan data statis
+                $rowData = [
                     $sub->id,
                     $sub->submission_number,
                     $sub->customer_name,
@@ -252,7 +266,22 @@ class SubmissionController extends Controller
                     $sub->form ? $sub->form->title : '',
                     $sub->status,
                     $sub->submitted_at ?? $sub->created_at,
-                ]);
+                ];
+
+                // Siapkan data dinamis (jawaban)
+                // Buat array asosiatif [Label => Jawaban] untuk memudahkan pencocokan
+                $subValues = [];
+                foreach ($sub->values as $val) {
+                    $label = $val->field_label ?? ($val->field ? $val->field->label : 'Unknown Field');
+                    $subValues[$label] = $val->value_text ?? json_encode($val->value_json);
+                }
+
+                // Masukkan jawaban sesuai urutan Dynamic Headers
+                foreach ($dynamicHeaders as $header) {
+                    $rowData[] = $subValues[$header] ?? ''; // Jika tidak ada jawaban, isi kosong
+                }
+
+                fputcsv($file, $rowData);
             }
 
             fclose($file);
