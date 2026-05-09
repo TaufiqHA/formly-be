@@ -15,7 +15,18 @@ class FormController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $forms = Form::where('user_id', $request->user()->id)->get();
+        $forms = Form::where('user_id', $request->user()->id)
+            ->when($request->filled('status'), function ($query) use ($request) {
+                // Filter berdasarkan status ('active' atau 'draft')
+                $query->where('status', $request->status);
+            })
+            ->when($request->filled('search'), function ($query) use ($request) {
+                // Pencarian berdasarkan judul form
+                $query->where('title', 'like', '%'.$request->search.'%');
+            })
+            // Urutkan dari yang terbaru
+            ->latest()
+            ->get();
 
         return response()->json([
             'success' => true,
