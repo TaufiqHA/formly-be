@@ -56,6 +56,43 @@ class AuthController extends Controller
     }
 
     /**
+     * Handle user registration.
+     */
+    public function register(Request $request): JsonResponse
+    {
+        // 1. Validasi input
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        // 2. Buat user baru
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
+
+        // 3. Buat token baru menggunakan Sanctum
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        // 4. Kembalikan respons sesuai format (Status: 201 Created)
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'token' => $token,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ],
+            ],
+            'message' => 'Registrasi berhasil',
+        ], 201);
+    }
+
+    /**
      * Handle user logout and revoke the current token.
      */
     public function logout(Request $request): JsonResponse
@@ -87,6 +124,43 @@ class AuthController extends Controller
                 'avatar_url' => $user->avatar_url,
                 'role' => $user->role,
                 'created_at' => $user->created_at,
+            ],
+        ]);
+    }
+
+    /**
+     * Update current user profile data.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // 1. Validasi input
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
+            'phone' => 'nullable|string|max:20',
+            'location' => 'nullable|string|max:255',
+        ]);
+
+        // 2. Update data user
+        $user->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'location' => $request->location,
+        ]);
+
+        // 3. Kembalikan respons sesuai format API Reference
+        return response()->json([
+            'success' => true,
+            'message' => 'Profil berhasil diperbarui',
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'location' => $user->location,
             ],
         ]);
     }

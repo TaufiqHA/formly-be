@@ -155,4 +155,90 @@ class AuthTest extends TestCase
 
         $response->assertStatus(401);
     }
+
+    /**
+     * Test user can register.
+     */
+    public function test_user_can_register(): void
+    {
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'New User',
+            'email' => 'newuser@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'token',
+                    'user' => [
+                        'id',
+                        'name',
+                        'email',
+                    ],
+                ],
+                'message',
+            ])
+            ->assertJson([
+                'success' => true,
+                'message' => 'Registrasi berhasil',
+                'data' => [
+                    'user' => [
+                        'name' => 'New User',
+                        'email' => 'newuser@example.com',
+                    ],
+                ],
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'newuser@example.com',
+            'name' => 'New User',
+        ]);
+        $this->assertNotEmpty($response->json('data.token'));
+    }
+
+    /**
+     * Test authenticated user can update profile.
+     */
+    public function test_authenticated_user_can_update_profile(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Old Name',
+            'email' => 'old@example.com',
+            'phone' => '08111111',
+            'location' => 'Old City',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->putJson('/api/v1/auth/profile', [
+            'name' => 'New Name',
+            'email' => 'new@example.com',
+            'phone' => '08222222',
+            'location' => 'New City',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Profil berhasil diperbarui',
+                'data' => [
+                    'id' => $user->id,
+                    'name' => 'New Name',
+                    'email' => 'new@example.com',
+                    'phone' => '08222222',
+                    'location' => 'New City',
+                ],
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'name' => 'New Name',
+            'email' => 'new@example.com',
+            'phone' => '08222222',
+            'location' => 'New City',
+        ]);
+    }
 }
