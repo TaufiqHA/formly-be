@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
@@ -14,7 +14,7 @@ class NotificationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         // Ambil notifikasi (unread dulu, baru read, lalu urut dari terbaru)
         // Kita juga bisa melakukan pagination
         $notifications = $user->notifications()->paginate(20);
@@ -44,7 +44,7 @@ class NotificationController extends Controller
     /**
      * Tandai notifikasi spesifik sebagai sudah dibaca, atau semua jika tidak ada ID.
      */
-    public function markAsRead(Request $request, string $id = null): JsonResponse
+    public function markAsRead(Request $request, ?string $id = null): JsonResponse
     {
         $user = $request->user();
 

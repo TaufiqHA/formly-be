@@ -34,8 +34,8 @@ class FormTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    '*' => ['id', 'title', 'slug', 'status', 'updated_at']
-                ]
+                    '*' => ['id', 'title', 'slug', 'status', 'updated_at'],
+                ],
             ]);
     }
 
@@ -45,20 +45,20 @@ class FormTest extends TestCase
 
         $response = $this->postJson('/api/v1/forms', [
             'title' => 'New Survey',
-            'description' => 'A description here'
+            'description' => 'A description here',
         ]);
 
         $response->assertStatus(201)
             ->assertJsonStructure([
                 'success',
-                'data' => ['id', 'title', 'slug', 'status']
+                'data' => ['id', 'title', 'slug', 'status'],
             ])
             ->assertJsonPath('data.title', 'New Survey')
             ->assertJsonPath('data.status', 'draft');
 
         $this->assertDatabaseHas('forms', [
             'title' => 'New Survey',
-            'user_id' => $this->user->id
+            'user_id' => $this->user->id,
         ]);
     }
 
@@ -73,7 +73,7 @@ class FormTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'success',
-                'data' => ['id', 'title', 'description', 'status', 'fields']
+                'data' => ['id', 'title', 'description', 'status', 'fields'],
             ]);
     }
 
@@ -85,7 +85,7 @@ class FormTest extends TestCase
 
         $response = $this->putJson("/api/v1/forms/{$form->id}", [
             'title' => 'Updated Title',
-            'description' => 'Updated Description'
+            'description' => 'Updated Description',
         ]);
 
         $response->assertStatus(200)
@@ -93,7 +93,7 @@ class FormTest extends TestCase
 
         $this->assertDatabaseHas('forms', [
             'id' => $form->id,
-            'title' => 'Updated Title'
+            'title' => 'Updated Title',
         ]);
     }
 
@@ -115,13 +115,13 @@ class FormTest extends TestCase
     {
         $form = Form::factory()->create([
             'user_id' => $this->user->id,
-            'status' => 'draft'
+            'status' => 'draft',
         ]);
 
         Sanctum::actingAs($this->user);
 
         $response = $this->patchJson("/api/v1/forms/{$form->id}/status", [
-            'status' => 'active'
+            'status' => 'active',
         ]);
 
         $response->assertStatus(200)
@@ -141,7 +141,7 @@ class FormTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'success',
-                'data' => ['total_views', 'total_submissions', 'conversion_rate']
+                'data' => ['total_views', 'total_submissions', 'conversion_rate'],
             ]);
     }
 
@@ -150,12 +150,12 @@ class FormTest extends TestCase
         Form::factory()->create([
             'user_id' => $this->user->id,
             'status' => 'active',
-            'title' => 'Active Form'
+            'title' => 'Active Form',
         ]);
         Form::factory()->create([
             'user_id' => $this->user->id,
             'status' => 'draft',
-            'title' => 'Draft Form'
+            'title' => 'Draft Form',
         ]);
 
         Sanctum::actingAs($this->user);
@@ -177,11 +177,11 @@ class FormTest extends TestCase
     {
         Form::factory()->create([
             'user_id' => $this->user->id,
-            'title' => 'Survey Kepuasan Pelanggan'
+            'title' => 'Survey Kepuasan Pelanggan',
         ]);
         Form::factory()->create([
             'user_id' => $this->user->id,
-            'title' => 'Formulir Pemesanan Kopi'
+            'title' => 'Formulir Pemesanan Kopi',
         ]);
 
         Sanctum::actingAs($this->user);
@@ -204,12 +204,12 @@ class FormTest extends TestCase
         Form::factory()->create([
             'user_id' => $this->user->id,
             'status' => 'active',
-            'title' => 'Order Kopi Active'
+            'title' => 'Order Kopi Active',
         ]);
         Form::factory()->create([
             'user_id' => $this->user->id,
             'status' => 'draft',
-            'title' => 'Order Kopi Draft'
+            'title' => 'Order Kopi Draft',
         ]);
 
         Sanctum::actingAs($this->user);
