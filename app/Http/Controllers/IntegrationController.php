@@ -19,15 +19,15 @@ class IntegrationController extends Controller
         try {
             // Gunakan metode yang dibuat di service
             $data = $this->apiService->fetchDataWithFacade('/users');
-            
+
             return response()->json([
                 'success' => true,
-                'data' => $data
+                'data' => $data,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengambil data: ' . $e->getMessage()
+                'message' => 'Gagal mengambil data: '.$e->getMessage(),
             ], 500);
         }
     }

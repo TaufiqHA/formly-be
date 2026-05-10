@@ -3,8 +3,10 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Models\Form;
+use App\Models\FormField;
 use App\Models\Submission;
 use App\Models\SubmissionNote;
+use App\Models\SubmissionValue;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -73,7 +75,7 @@ class SubmissionTest extends TestCase
 
         $form1 = Form::factory()->create(['user_id' => $this->user->id, 'title' => 'Form 1']);
         $form2 = Form::factory()->create(['user_id' => $this->user->id, 'title' => 'Form 2']);
-        
+
         Submission::factory()->count(3)->create(['form_id' => $form1->id]);
         Submission::factory()->count(2)->create(['form_id' => $form2->id]);
 
@@ -81,7 +83,7 @@ class SubmissionTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonCount(3, 'data.items');
-            
+
         $response = $this->getJson("/api/v1/submissions?form_id={$form2->id}");
 
         $response->assertStatus(200)
@@ -200,17 +202,17 @@ class SubmissionTest extends TestCase
         Sanctum::actingAs($this->user);
 
         $form = Form::factory()->create(['user_id' => $this->user->id]);
-        $field = \App\Models\FormField::factory()->create([
+        $field = FormField::factory()->create([
             'form_id' => $form->id,
-            'label' => 'Dynamic Question'
+            'label' => 'Dynamic Question',
         ]);
-        
+
         $submission = Submission::factory()->create(['form_id' => $form->id]);
-        \App\Models\SubmissionValue::factory()->create([
+        SubmissionValue::factory()->create([
             'submission_id' => $submission->id,
             'form_field_id' => $field->id,
             'field_label' => 'Dynamic Question',
-            'value_text' => 'Dynamic Answer'
+            'value_text' => 'Dynamic Answer',
         ]);
 
         $response = $this->get('/api/v1/submissions/export');
@@ -219,13 +221,13 @@ class SubmissionTest extends TestCase
             ->assertHeader('Content-Type', 'text/csv; charset=utf-8');
 
         $content = $response->streamedContent();
-        
+
         // Verify static headers
         $this->assertStringContainsString('ID,"Submission Number","Customer Name","Customer Phone","Form Title",Status,"Submitted At"', $content);
-        
+
         // Verify dynamic header
         $this->assertStringContainsString('"Dynamic Question"', $content);
-        
+
         // Verify dynamic value
         $this->assertStringContainsString('"Dynamic Answer"', $content);
     }

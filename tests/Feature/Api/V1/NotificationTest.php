@@ -7,7 +7,6 @@ use App\Models\Submission;
 use App\Models\User;
 use App\Notifications\NewSubmissionNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -68,7 +67,7 @@ class NotificationTest extends TestCase
                 'data' => [
                     'unread_count',
                     'items' => [
-                        '*' => ['id', 'type', 'data', 'read_at', 'created_at']
+                        '*' => ['id', 'type', 'data', 'read_at', 'created_at'],
                     ],
                     'pagination',
                 ],
@@ -101,7 +100,7 @@ class NotificationTest extends TestCase
 
         $this->assertEquals(2, $this->user->unreadNotifications()->count());
 
-        $response = $this->patchJson("/api/v1/notifications/mark-as-read");
+        $response = $this->patchJson('/api/v1/notifications/mark-as-read');
 
         $response->assertStatus(200);
         $this->assertEquals(0, $this->user->unreadNotifications()->count());

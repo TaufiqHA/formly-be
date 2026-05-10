@@ -8,6 +8,7 @@ use App\Models\SubmissionNote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SubmissionController extends Controller
 {
@@ -299,6 +300,6 @@ class SubmissionController extends Controller
             fclose($file);
         };
 
-        return new \Symfony\Component\HttpFoundation\StreamedResponse($callback, 200, $headers);
+        return new StreamedResponse($callback, 200, $headers);
     }
 }

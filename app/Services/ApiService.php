@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
 use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Http;
 
 class ApiService
 {
@@ -14,7 +14,7 @@ class ApiService
         // Opsi 1: Menggunakan raw Guzzle Client
         $this->client = new Client([
             'base_uri' => config('services.third_party.base_url'),
-            'timeout'  => 10.0,
+            'timeout' => 10.0,
         ]);
     }
 
@@ -24,6 +24,7 @@ class ApiService
     public function fetchDataWithGuzzle($endpoint)
     {
         $response = $this->client->request('GET', $endpoint);
+
         return json_decode($response->getBody()->getContents(), true);
     }
 
@@ -36,7 +37,7 @@ class ApiService
             ->withHeaders([
                 'Accept' => 'application/json',
             ])
-            ->get(config('services.third_party.base_url') . $endpoint);
+            ->get(config('services.third_party.base_url').$endpoint);
 
         return $response->json();
     }

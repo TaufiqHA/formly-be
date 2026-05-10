@@ -4,7 +4,6 @@ namespace App\Notifications;
 
 use App\Models\Submission;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 class NewSubmissionNotification extends Notification
@@ -44,7 +43,7 @@ class NewSubmissionNotification extends Notification
             'submission_number' => $this->submission->submission_number,
             'customer_name' => $this->submission->customer_name,
             'form_title' => $this->submission->form ? $this->submission->form->title : 'Form',
-            'message' => 'Ada submission baru dari ' . $this->submission->customer_name,
+            'message' => 'Ada submission baru dari '.$this->submission->customer_name,
         ];
     }
 }
